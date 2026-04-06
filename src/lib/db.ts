@@ -15,9 +15,7 @@ export function getDb() {
 
   const db = new Database(dbPath, { readonly: true, fileMustExist: true });
   
-  // WAL mode for better concurrency when backend is writing
-  db.pragma('journal_mode = WAL');
-  
+
   if (process.env.NODE_ENV !== 'production') {
     globalThis._sqliteDb = db;
   }

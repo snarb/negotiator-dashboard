@@ -18,7 +18,7 @@ export default function Playground() {
     if (!ticketId) return;
     try {
       setLoading(true);
-      const res = await fetch(`/api/tickets/${encodeURIComponent(ticketId)}`);
+      const res = await fetch(`/api/tickets/${encodeURIComponent(ticketId)}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         setTicketData(data);
@@ -26,7 +26,7 @@ export default function Playground() {
         setTicketData(null);
       }
       
-      const hooksRes = await fetch(`/api/webhooks/outbound?ticket_id=${encodeURIComponent(ticketId)}`);
+      const hooksRes = await fetch(`/api/webhooks/outbound?ticket_id=${encodeURIComponent(ticketId)}`, { cache: 'no-store' });
       if (hooksRes.ok) {
         const hooksData = await hooksRes.json();
         setWebhooks(hooksData.webhooks || []);
@@ -94,6 +94,7 @@ export default function Playground() {
       />
       <ChatInterface 
         ticketData={ticketData}
+        webhooks={webhooks}
         loading={loading}
         onSendMessage={handleSendMessage}
       />

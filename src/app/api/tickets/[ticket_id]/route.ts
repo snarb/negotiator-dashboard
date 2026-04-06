@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ ticket_id: string }> }
@@ -13,22 +15,23 @@ export async function GET(
     const ticketStmt = db.prepare('SELECT * FROM tickets WHERE ticket_id = ?');
     const ticketRow = ticketStmt.get(ticket_id) as any;
 
-    if (!ticketRow) {
-      return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
-    }
+    // We do NOT return 404 here anymore, because the worker might not have created the ticket yet.
+    // Instead we load inbound events and action traces. If EVERYTHING is empty, we can return 404 at the end.
 
-    // Parse JSON columns naturally stored as strings by SQLite
-    if (typeof ticketRow.messages === 'string') {
-        try { ticketRow.messages = JSON.parse(ticketRow.messages); } catch(e){}
-    }
-    if (typeof ticketRow.signal_history === 'string') {
-        try { ticketRow.signal_history = JSON.parse(ticketRow.signal_history); } catch(e){}
-    }
-    if (typeof ticketRow.payment_data_snapshot === 'string') {
-        try { ticketRow.payment_data_snapshot = JSON.parse(ticketRow.payment_data_snapshot); } catch(e){}
-    }
-    if (typeof ticketRow.metadata === 'string') {
-        try { ticketRow.metadata = JSON.parse(ticketRow.metadata); } catch(e){}
+    if (ticketRow) {
+        // Parse JSON columns naturally stored as strings by SQLite
+        if (typeof ticketRow.messages === 'string') {
+            try { ticketRow.messages = JSON.parse(ticketRow.messages); } catch(e){}
+        }
+        if (typeof ticketRow.signal_history === 'string') {
+            try { ticketRow.signal_history = JSON.parse(ticketRow.signal_history); } catch(e){}
+        }
+        if (typeof ticketRow.payment_data_snapshot === 'string') {
+            try { ticketRow.payment_data_snapshot = JSON.parse(ticketRow.payment_data_snapshot); } catch(e){}
+        }
+        if (typeof ticketRow.metadata === 'string') {
+            try { ticketRow.metadata = JSON.parse(ticketRow.metadata); } catch(e){}
+        }
     }
 
     // 2. Get the inbound events status for observability
@@ -55,8 +58,12 @@ export async function GET(
     const outboundStmt = db.prepare('SELECT * FROM outbound_messages WHERE ticket_id = ? ORDER BY created_at DESC');
     const outbound_messages = outboundStmt.all(ticket_id) as any[];
 
+    if (!ticketRow && events.length === 0 && actions.length === 0 && outbound_messages.length === 0) {
+        return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
+    }
+
     return NextResponse.json({
-      ticket: ticketRow,
+      ticket: ticketRow || null,
       inbound_events: events,
       ticket_actions: actions,
       outbound_messages,

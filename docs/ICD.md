@@ -1,3 +1,7 @@
+Вот обновленный документ. Я добавил описание **Outbound Action API** отдельным разделом и уточнил во введении, что этот API хостится на стороне UI для тестирования и отображения ответов в playground-режиме.
+
+***
+
 # Interface Control Document (ICD)
 
 ## Introduction
@@ -5,18 +9,20 @@
 This document defines the external integration contract for:
 
 - an external UI/dashboard;
-- a UI testing tool that submits customer messages through the public API and observes system outputs, including persisted tool-call traces.
+- a UI testing tool that submits customer messages through the public API and observes system outputs, including persisted tool-call traces;
+- a UI-hosted playground that provides endpoints to receive and display backend responses and actions.
 
 This ICD intentionally documents only externally relevant interfaces and omits internal decisioning and optimization details.
 
 The integration surface consists of:
 
 - the public Inbound API for submitting customer messages;
+- the Outbound Action API (hosted by the UI/testing tool) to receive system responses and actions;
 - read-only access to the SQLite database for dashboard/reporting/test observation use cases.
 
 For external consumers, SQLite access must be **read-only**. External systems must never write to the application database, update records, delete records, or create schema objects.
 
-## API Interface
+## API Interface (Inbound)
 
 ### Authentication
 
@@ -150,6 +156,98 @@ Recommended flow for an external UI testing tool:
    - persisted customer-visible responses from `outbound_messages.message_text`;
    - persisted tool-call traces from `tickets.messages`.
 
+
+## Outbound Action API (UI-Hosted / Playground)
+
+This is the **external API** that our backend system calls when it needs to send a message or execute an external action. 
+
+For testing and development purposes, **these endpoints are hosted on the UI side**. After the backend processes a ticket and generates a response or an action, it triggers these webhook-style endpoints. The UI must listen for these requests, display the responses in the interface, and allow the user to reply further to maintain a continuous conversation in the playground.
+
+### Authentication
+
+```http
+Authorization: Bearer <token>
+```
+
+### Suggested Endpoints
+
+```http
+POST /external-api/v1/messages/send
+POST /external-api/v1/actions/refund
+POST /external-api/v1/actions/cancel-subscription
+POST /external-api/v1/actions/grant-free-months
+POST /external-api/v1/actions/grant-bundle
+POST /external-api/v1/actions/escalate-to-human
+```
+
+### Suggested Requests
+
+**Send message:**
+```json
+{
+  "project_id": "string",
+  "ticket_id": "string",
+  "message_text": "string"
+}
+```
+
+**Refund:**
+```json
+{
+  "project_id": "string",
+  "ticket_id": "string",
+  "refund_pct": 30
+}
+```
+
+**Grant 3 free months:**
+```json
+{
+  "project_id": "string",
+  "ticket_id": "string",
+  "months": 3
+}
+```
+
+**Grant bundle:**
+```json
+{
+  "project_id": "string",
+  "ticket_id": "string",
+  "bundle_id": "B_1 | B_2 | B_3"
+}
+```
+
+**Cancel subscription:**
+```json
+{
+  "project_id": "string",
+  "ticket_id": "string"
+}
+```
+
+### Success Response
+
+```json
+{
+  "status": "ok",
+  "external_action_id": "string"
+}
+```
+
+### Error Response
+
+```json
+{
+  "status": "error",
+  "error_code": "action_failed",
+  "message": "external action failed"
+}
+```
+
+*Note: If a critical outbound action fails, it must be treated as not completed and the ticket should be escalated to a human agent via `_escalate_to_human(escalated_on_error=true)`.*
+
+
 ## Database Schema
 
 ### Integration Rule
@@ -191,7 +289,6 @@ Columns:
 - `finalization_reason` `VARCHAR(64)` nullable
 - `initial_stage_started` `BOOLEAN` not null
 - `negotiation_stage_started` `BOOLEAN` not null
-- `current_step_index` `INTEGER` nullable
 - `signal_history` `JSON` not null
 - `payment_data_snapshot` `JSON` not null
 - `messages` `JSON` not null
@@ -447,7 +544,6 @@ Allowed tool names currently persisted in `tickets.messages[*].tool_calls[*].fun
 - `GRANT_BUNDLE`
 - `GRANT_3_FREE_MONTHS`
 - `SEND_RESPONSE`
-- `INCREMENT_STEP_INDEX`
 
 ### Delay Values
 
@@ -457,7 +553,6 @@ Allowed values for persisted `SEND_RESPONSE.delay` arguments:
 - `short`
 - `mid`
 - `long`
-
 
 ### Ticket Action Status
 

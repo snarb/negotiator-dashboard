@@ -1,12 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
+import { getWebhooks, addWebhook } from "@/lib/webhookStore";
 
-declare global {
-  var _mockWebhooks: any[];
-}
-
-if (!globalThis._mockWebhooks) {
-  globalThis._mockWebhooks = [];
-}
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,17 +14,16 @@ export async function POST(request: NextRequest) {
       headers,
       payload: body,
       // Attempt to extract ticket_id if the webhook shape contains it
-      ticket_id: body?.ticket_id || body?.data?.ticket_id || null, 
+      ticket_id: body?.ticket_id || body?.data?.ticket_id || null,
+      type: "generic_webhook"
     };
 
-    globalThis._mockWebhooks.push(logEntry);
+    addWebhook(logEntry);
 
-    // Keep memory bounded to last 1000 webhooks
-    if (globalThis._mockWebhooks.length > 1000) {
-      globalThis._mockWebhooks.shift();
-    }
-
-    return NextResponse.json({ status: 'ok', message: 'Webhook intercepted securely by Playground' });
+    return NextResponse.json({
+      status: "ok",
+      message: "Webhook intercepted securely by Playground",
+    });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 400 });
   }
@@ -37,15 +31,15 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
-  const ticketId = url.searchParams.get('ticket_id');
+  const ticketId = url.searchParams.get("ticket_id");
 
-  let results = globalThis._mockWebhooks || [];
+  let results = getWebhooks();
 
   if (ticketId) {
-    results = results.filter(w => w.ticket_id === ticketId);
+    results = results.filter((w) => w.ticket_id === ticketId);
   }
 
-  // Most recent first
+  // Most recent first for observability logs (we might invert this in chat but this matches previous GET logic)
   results = results.slice().reverse();
 
   return NextResponse.json({ webhooks: results });

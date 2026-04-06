@@ -44,6 +44,7 @@
 ## Documentation
 - Comprehensive documentation regarding system architecture, agent logic, core pipelines, and reward models is available in docs/architecture.md
 - The data contract and database schema for external UI integration can be found in `docs/ICD.md`
+- Alsways update documentation as the last step, fully preserve details in the existing docs; remove or rewrite only the sections that are actually obsolete.
 
 
 ## Core Principles 
